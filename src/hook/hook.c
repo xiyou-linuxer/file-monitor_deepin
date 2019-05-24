@@ -20,7 +20,7 @@
 
 char  SHM_NAME[256] ;
 #define SHM_NAME_SEM "/memmap_sem"
-
+#define FILE_PATH "../../etc/init.conf"
 char inotify_name[1024];
 int per_flag = 0;
 struct msgmbuf
@@ -28,22 +28,7 @@ struct msgmbuf
     long long  mtype;
     char mtext[1024];
 };
-
-unsigned long get_file_size(const char *path)
-{
-    unsigned long filesize = -1;
-    struct stat statbuff;
-    if (stat(path, &statbuff) < 0)
-    {
-        return filesize;
-    }
-    else
-    {
-        filesize = statbuff.st_size;
-    }
-    return filesize;
-}
-
+char filename_path[200];
 typedef int (*orig_open_f_type)(const char *pathname, int flags,...);
 typedef int (*orig_close_f_type)(int fd);
 typedef int (*orig_read_f_type)(int fildes, void *buf, size_t nbyte);
@@ -52,30 +37,48 @@ typedef int (*orig_f_ftruncate)(int fd, off_t length);
 
 int writen(int fd, const void *vptr, int n);
 int readn(int fd, void *vptr, int n);
+void get_path() {
+  static void *handle = NULL;
+  orig_open_f_type orig_open;
+  orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
 
-void *my_memmove(void *dst, const void *src, size_t n)
-{
-    char *s_dst;
-    char *s_src;
-    s_dst = (char *)dst;
-    s_src = (char *)src;
-    if (s_dst > s_src && (s_src + n > s_dst))
-    { //-------------------------第二种内存覆盖的情形。
-        s_dst = s_dst + n - 1;
-        s_src = s_src + n - 1;
-        while (n--)
-        {
-            *s_dst-- = *s_src--;
-        }
+  //打开配置文件
+  int fd = orig_open(FILE_PATH, O_RDWR);
+  if (fd < 0) {
+    exit(0);
+  }
+  //读取配置文件
+  char c[200];
+  bzero(c, sizeof(c));
+  readn(fd, c, sizeof(c));
+
+  const int j = strlen(c);
+
+  for (int i = 0; i < j; i++) {
+    if (c[i] == '\n')
+      c[i] = 0;
+  }
+  for (int i = 0; i < j - 1; i++) {
+    if (strncmp(&c[i], "path:", 5) == 0) {
+        strcpy(filename_path, &c[i + 5]);
+        continue;
     }
-    else
-    {
-        while (n--)
-        {
-            *s_dst++ = *s_src++;
-        }
-    }
-    return dst;
+  }
+  //关闭配置文件
+  orig_close_f_type orig_close;
+  orig_close = (orig_close_f_type)dlsym(RTLD_NEXT, "close");
+  orig_close(fd);
+}
+
+unsigned long get_file_size(const char *path) {
+  unsigned long filesize = -1;
+  struct stat statbuff;
+  if (stat(path, &statbuff) < 0) {
+    return filesize;
+  } else {
+    filesize = statbuff.st_size;
+  }
+  return filesize;
 }
 void set_map(const char *pathname)
 {
@@ -209,20 +212,21 @@ int open(const char *pathname, int flags, ...)
         return -1;
     }*/
     /* Some evil injected code goes here. */
-    int res = 0;
-    char resolved_path[100];
-    va_list ap; //可变参数列表
-    va_start(ap, flags);
-    mode_t third_agrs = va_arg(ap, mode_t);
-    if (third_agrs >= 0 && third_agrs <= 0777)
-    {
+   int res = 0;
+   char resolved_path[100];
+   va_list ap; //可变参数列表
+   va_start(ap, flags);
+   mode_t third_agrs = va_arg(ap, mode_t);
+   if (third_agrs >= 0 && third_agrs <= 0777)
+   {
        per_flag = 1;
     }
     va_end(ap);
     realpath(pathname,resolved_path);
     orig_open_f_type orig_open;
     orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
-    if (strncmp("/home/kiosk/TCP_test/example/inotify/testd" ,resolved_path,42) == 0)
+    get_path();
+    if (strncmp(filename_path, resolved_path, strlen(filename_path) - 1) == 0)
     {
       if (per_flag == 0)
       res = orig_open(resolved_path, flags);
@@ -271,7 +275,8 @@ int close(int fd)
     orig_readlink orig_read_link;
     orig_read_link = (orig_readlink)dlsym(RTLD_NEXT, "readlink");
     int res = orig_read_link(temp_buf, file_path, sizeof(file_path) - 1);
-    if (strncmp("/home/kiosk/TCP_test/example/inotify/testd", file_path, 42) == 0 && fd > 2)
+    get_path();
+    if (strncmp(filename_path, file_path, strlen(filename_path)-1) == 0 && fd > 2)
         send_link(file_path,1025);
     orig_close_f_type orig_close;
     orig_close = (orig_close_f_type)dlsym(RTLD_NEXT, "close");
