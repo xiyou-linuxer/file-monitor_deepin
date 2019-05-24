@@ -68,7 +68,7 @@ void printdir(char *dir, int depth, int fd)
 
 void transFile(int sockfd ,struct data * open_file)
 {
-   cout << open_file->file_contents << endl;
+   cout  << open_file->file_contents ;
     // int res = send(sockfd, open_file, sizeof(struct data), 0);
     // if (res == -1)
     // {
@@ -103,16 +103,21 @@ int get_shm(int sockfd, struct data *open_file, char *name)
     memset(open_file->file_contents, '\0',
            sizeof(open_file->file_contents));
     //多线程发送
-    int n = (open_file->length / 1024 + 2); /*设置10分*/
+    int n = (open_file->length / 1024 + 4); /*设置10分*/
     size_t percent = 1024;
     struct data blocks[n];
+    char file_name_test[2];
     for(int temp = 0 ; temp < n ;temp++)
     {
+        memset(file_name_test,'\0',sizeof(file_name_test));
+        file_name_test[0] = '@';
+        file_name_test[1] = temp +'0';
         strcpy(blocks[temp].file_name,open_file->file_name);
+        strcat(blocks[temp].file_name,file_name_test);
         strcpy(blocks[temp].mac,open_file->mac);
         blocks[temp].length = open_file->length;
         strcpy(blocks[temp].events,open_file->events);
-        memmove(blocks[temp].file_contents , memPtr+temp*percent ,1024);      
+        memmove(blocks[temp].file_contents , memPtr+temp*percent ,sizeof(blocks[temp].file_contents));      
     }
     thread t[n];
     for (int i = 0; i < n; ++i)
@@ -120,6 +125,7 @@ int get_shm(int sockfd, struct data *open_file, char *name)
         t[i] = thread(transFile,sockfd,&blocks[i]);
     }
     std::for_each(t, t + n, [](thread &t) { t.join(); });
+    cout << endl;
     // for (int i = 0; i < (open_file->length /1024 + 4)*1024; i++) {
     //   if (i % 1024 == 0) {
     //     if (strlen(open_file->file_contents) > 0) {
@@ -360,8 +366,8 @@ int main(int argc, char **argv)
 {
     struct filename_fd_desc FileArray[main_important.array_length];
     struct epoll_event Epollarray[main_important.epoll_number];
-    const char *ip = "192.168.28.164";
-    //const char *ip = "127.0.0.1";
+    //const char *ip = "192.168.28.164";
+    const char *ip = "127.0.0.1";
     int port = 8888;
     int keep_alive_flag = 1;
     struct sockaddr_in server_address;
