@@ -37,9 +37,10 @@ class locker {
 	    throw std::exception();
 	}
     }
-    //销毁互斥锁 ~locker() {
+    //销毁互斥锁 
+    ~locker() {
 	pthread_mutex_destroy(&m_mutex);
-    }
+    } 
     //获得互斥锁
     bool lock() {
 	return pthread_mutex_lock(&m_mutex) == 0;
