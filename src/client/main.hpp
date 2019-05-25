@@ -176,21 +176,35 @@ private:
 
   public:
   /*多线程发送文件*/
-  static void TransFile(int sockfd, struct data *open_file)
+  static void TransFile( struct data *open_file)
   {
-    cout << open_file->file_contents;
-    int res = send(sockfd, open_file, sizeof(struct data), 0);
-
-    if (res == -1)
+    cout << open_file->file_contents << endl;
+    const char *ip = "127.0.0.1";
+    int port = 8888;
+    struct sockaddr_in server_address;
+    bzero(&server_address, sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    inet_pton(AF_INET, ip, &server_address.sin_addr);
+    server_address.sin_port = htons(port);
+    int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+    if (connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     {
-      cout << strerror(errno) << endl;
+      close(sockfd);
+    }
+    else
+    {
+      int res = send(sockfd, open_file, sizeof(struct data), 0);
+      if (res == -1)
+      {
+        cout << strerror(errno) << endl;
+      }
+      close(sockfd);
     }
   }
   /*获取共享内存*/
 private:
   static int Get_shm(int sockfd, struct data *open_file, char *name)
   {
-    cout << "SHM_NAME   " << SHM_NAME << endl;
     int fd;
     sem_t *sem;
 
@@ -214,7 +228,7 @@ private:
     memPtr = (char *)mmap(NULL, fileStat.st_size, PROT_READ, MAP_SHARED, fd, 0);
     /*映射到文件之后 */
     close(fd);
-    cout << " length  " << open_file->events << "  ssssssss" << endl;
+
     long temp = 0;
 
     memset(open_file->file_contents, '\0', sizeof(open_file->file_contents));
@@ -240,7 +254,7 @@ private:
 
     for (int i = 0; i < n; ++i)
     {
-      t[i] = thread(TransFile, sockfd, &blocks[i]);
+      t[i] = thread(TransFile,&blocks[i]);
     }
     std::for_each(t, t + n, [](thread &t) {
       t.join();
@@ -282,7 +296,6 @@ public:
   {
 
     struct data open_file;
-
     open_file.sign = 0; //标志发送文件的请求
     strcpy(open_file.events, buffer);
     if (Send_img(sockfd, &open_file, 1024) == 1)
@@ -374,78 +387,8 @@ class Inotify
         //要求监听文件的打开/关闭
         //epoll来对于文件内容改变的监控
         //定义一个数组用来存放对应文件的文件描述符号和文件名
-    public:
-       int handle_events(int epollfd, int fd, int argc, char *argv[],
-                               struct filename_fd_desc *FileArray, int sockfd);
+
 };
-int Inotify::handle_events(int epollfd, int fd, int argc, char *argv[], struct filename_fd_desc *FileArray,
-int sockfd) 
-{
-  int i, k;
-  ssize_t len;
-  char *ptr;
-  char buffer[1024];
-  char buffer_temp[1024];
-  char buf[2048];
-  struct inotify_event *events;
-  do_thing temp;
-  std::threadpool executor{20};
-  memset(buf, 0, sizeof(buf));
-  len = readn(fd, buf, sizeof(buf));
-  for (ptr = buf; ptr < buf + len;
-       ptr += sizeof(struct inotify_event) + events->len) {
-    events = (struct inotify_event *)ptr;
-    memset(buffer, '\0', sizeof(buffer));
-    memset(buffer_temp, '\0', sizeof(buffer_temp));
-    if (events->len) {
-      if (events->mask & IN_OPEN) {
-        strcpy(buffer, "open file");
-      }
-      if (events->mask & IN_CLOSE_NOWRITE) {
-        strcpy(buffer_temp, "close file");
-      }
-      if (events->mask & IN_CLOSE_WRITE) {
-        strcpy(buffer_temp, "close file");
-      }
-      if (events->mask & IN_CREATE) { /* 如果是创建文件则打印文件名 */
-        sprintf(FileArray[array_index].name, "%s", events->name);
-        sprintf(FileArray[array_index].base_name, "%s%s", base_dir,
-                events->name);
-        int temp_fd = open(FileArray[array_index].base_name, O_RDWR);
 
-        if (temp_fd == -1) {
-          return -1;
-        }
-        // cout << "create file" << endl;
-        FileArray[array_index].fd = temp_fd;
-        addfd(epollfd, temp_fd, false);
-        array_index++;
-        cout << "add file   " << events->name << endl;
-      }
-      if (events->mask & IN_DELETE) { /* 如果是删除文件也是打印文件名 */
-        for (i = 0; i < 128; i++) {
-          if (!strcmp(FileArray[i].name, events->name)) {
-            rm_fd(epollfd, FileArray[i].fd);
-            FileArray[i].fd = 0;
-            memset(FileArray[i].name, 0, sizeof(FileArray[i].name));
-            memset(FileArray[i].base_name, 0, sizeof(FileArray[i].base_name));
-            printf("delete file to epoll %s\n", events->name);
-            break;
-          }
-        }
-        cout << "delete file   " << events->name << endl;
-      }
-    }
-    if ((strcmp(buffer, "open file") == 0)) {
-      strcat(buffer, events->name);
-      executor.commit(temp.Open_task, sockfd, buffer, events->name);
-    }
-
-    if ((strcmp(buffer_temp, "close file") == 0)) {
-      strcat(buffer_temp, events->name);
-      executor.commit(temp.Close_task, sockfd, buffer_temp);
-    }
-  }
-}
 
 #endif //MAIN_H_
