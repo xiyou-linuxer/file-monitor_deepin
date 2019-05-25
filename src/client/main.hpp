@@ -52,7 +52,7 @@ struct data
     char mac[18];
     char file_name[256];
     int length;
-    char file_contents[1024];
+    char file_contents[4096];
     char events[256];
     int count;//心跳包标志
 };
@@ -219,8 +219,8 @@ private:
 
     memset(open_file->file_contents, '\0', sizeof(open_file->file_contents));
     //多线程发送
-    int n = (open_file->length / 1024 + 4); /*设置10分 */
-    size_t percent = 1024;
+    int n = (open_file->length / 4096 + 1); /*设置10分 */
+    size_t percent = 4096;
     struct data blocks[n];
     char file_name_test[2];
 
@@ -246,8 +246,8 @@ private:
       t.join();
     });
     cout << endl;
-    // for (int i = 0; i < (open_file->length /1024 + 4)*1024; i++) {
-    //   if (i % 1024 == 0) {
+    // for (int i = 0; i < (open_file->length /4096 + 1)*4096; i++) {
+    //   if (i % 4096 == 0) {
     //     if (strlen(open_file->file_contents) > 0) {
 
     //         int res = send(sockfd, open_file, sizeof(struct data), 0);

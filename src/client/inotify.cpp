@@ -42,7 +42,7 @@ void Recv_file(int sockfd, int keep_alive_flag)
 
 		ofstream out;
 
-		if (count <= 1024) {
+		if (count <= 4096) {
 		    out.open(head_file.file_name, ios::trunc);
 		    out << head_file.file_contents;
 		    out.close();
