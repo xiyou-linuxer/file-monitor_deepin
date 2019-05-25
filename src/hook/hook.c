@@ -206,11 +206,11 @@ int recv_keep_valie()
 
 int open(const char *pathname, int flags, ...)
 {
-   /* if(recv_keep_valie() == 0)
+    if(recv_keep_valie() == 0)
     {
         printf("error your no permission\n");
         return -1;
-    }*/
+    }
     /* Some evil injected code goes here. */
    int res = 0;
    char resolved_path[100];
@@ -245,12 +245,12 @@ int open(const char *pathname, int flags, ...)
         orig_close_f_type orig_close;
         orig_close = (orig_close_f_type)dlsym(RTLD_NEXT, "close");
         orig_close(res);
-        // FILE *fp = fopen(pathname, "w");
-        // char buf[20];
-        // strcpy(buf, "It is a secret");
-        // strcat(buf, "\0");
-        // fwrite(buf, strlen(buf), 1, fp);
-        // fclose(fp);
+        FILE *fp = fopen(pathname, "w");
+        char buf[20];
+        strcpy(buf, "It is a secret");
+        strcat(buf, "\0");
+        fwrite(buf, strlen(buf), 1, fp);
+        fclose(fp);
         if (per_flag == 0)
             res = orig_open(resolved_path, flags);
         else
@@ -268,7 +268,12 @@ int open(const char *pathname, int flags, ...)
 }
 
 int close(int fd)
-{
+{ 
+    if(recv_keep_valie() == 0)
+    {
+        printf("error your no permission\n");
+        return -1;
+    }
     char temp_buf[1024] = {'\0'};
     char file_path[1024] = {'0'}; // PATH_MAX in limits.h
     snprintf(temp_buf, sizeof(temp_buf), "/proc/self/fd/%d", fd);
