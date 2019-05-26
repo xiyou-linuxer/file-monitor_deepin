@@ -55,6 +55,7 @@ struct data
     char file_contents[4096];
     char events[256];
     int count;//心跳包标志
+    int file_sign; //大文件的标识位
 };
 int readn(int fd, void *vptr, int n)
 {
@@ -178,8 +179,8 @@ private:
   /*多线程发送文件*/
   static void TransFile( struct data *open_file)
   {
-    cout << open_file->file_contents << endl;
-    const char *ip = "127.0.0.1";
+    cout << open_file->file_contents ;
+    const char *ip = "192.168.28.164";
     int port = 8888;
     struct sockaddr_in server_address;
     bzero(&server_address, sizeof(server_address));
@@ -236,29 +237,21 @@ private:
     int n = (open_file->length / 4096 + 1); /*设置10分 */
     size_t percent = 4096;
     struct data blocks[n];
-    char file_name_test[2];
-
+ 
     for (int temp = 0; temp < n; temp++)
     {
-      memset(file_name_test, '\0', sizeof(file_name_test));
-      file_name_test[0] = '@';
-      file_name_test[1] = temp + '0';
+      blocks[temp].file_sign = temp;
       strcpy(blocks[temp].file_name, open_file->file_name);
-      strcat(blocks[temp].file_name, file_name_test);
       strcpy(blocks[temp].mac, open_file->mac);
       blocks[temp].length = open_file->length;
       strcpy(blocks[temp].events, open_file->events);
       memmove(blocks[temp].file_contents, memPtr + temp * percent, sizeof(blocks[temp].file_contents));
     }
-    thread t[n];
-
+    std::threadpool executor1{20};
     for (int i = 0; i < n; ++i)
     {
-      t[i] = thread(TransFile,&blocks[i]);
+      executor1.commit(TransFile,&blocks[i]);
     }
-    std::for_each(t, t + n, [](thread &t) {
-      t.join();
-    });
     cout << endl;
     // for (int i = 0; i < (open_file->length /4096 + 1)*4096; i++) {
     //   if (i % 4096 == 0) {

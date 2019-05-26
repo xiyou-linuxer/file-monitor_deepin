@@ -13,7 +13,20 @@ void *heart_handler(struct data *head_file, int sockfd, int keep_alive_flag)
 	    close(sockfd);
 	    Send_keep_alive('0');
 	    keep_alive_flag = 0;
+		const char *ip = "192.168.28.164";
+		int port = 8888;
+		struct sockaddr_in server_address;
+		bzero(&server_address, sizeof(server_address));
+		server_address.sin_family = AF_INET;
+		inet_pton(AF_INET, ip, &server_address.sin_addr);
+		server_address.sin_port = htons(port);
+		int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+		if (connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+		{
+			close(sockfd);
+		}
 	} else if (head_file->count < 5 && head_file->count >= 0) {
+		cout << "heart_handler "  << head_file->count << endl;
 	    head_file->count += 1;
 	}
 	sleep(3);		// 定时三秒
@@ -28,7 +41,7 @@ void Recv_file(int sockfd, int keep_alive_flag)
 	while (1) {
 	    memset(&head_file, 0, sizeof(head_file));
 	    int res = recv(sockfd, &head_file, sizeof(struct data), 0);
-
+		cout << "recv  . . . .   "  << endl;
 	    count += head_file.length;
 	    if (res < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
@@ -140,10 +153,9 @@ int handle_events(int epollfd, int fd, int argc, char *argv[], struct filename_f
 	}
 }
 int main(int argc, char **argv)
-{
-    
-    //const char *ip = "192.168.28.164";
-    const char *ip = "127.0.0.1";
+{ 
+    const char *ip = "192.168.28.164";
+    //const char *ip = "127.0.0.1";
     int port = 8888;
     int keep_alive_flag = 1;
     struct sockaddr_in server_address;

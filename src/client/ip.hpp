@@ -1,5 +1,7 @@
+#pragma once
 #ifndef IP_HPP
- /* code */
+#define IP_HPP
+/* code */
 #include <net/if.h>
 #include <errno.h>
 #include <sys/ioctl.h>
