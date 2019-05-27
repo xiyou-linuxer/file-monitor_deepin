@@ -1,2 +1,2 @@
 mystract_test: hook.c
-	gcc -fPIC -shared -o hook.so hook.c -ldl -std=c99	 
+	 gcc -shared -fPIC hook.c -o hook.so -ldl -lpthread -lrt

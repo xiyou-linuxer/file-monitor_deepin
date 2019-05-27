@@ -18,9 +18,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-char  SHM_NAME[256] ;
+char  SHM_NAME[256];
 #define SHM_NAME_SEM "/memmap_sem"
-#define FILE_PATH "../../etc/init.conf"
+#define FILE_PATH    "/home/kiosk/TCP_test/example/inotify/file-monitor_deepin/etc/init.conf"
 char inotify_name[1024];
 int per_flag = 0;
 struct msgmbuf
@@ -84,19 +84,18 @@ void set_map(const char *pathname)
 {
     int temp = 0;
     int g = 0;
-    for(g = strlen(pathname) ; g >= 0;g--)
+    for(g = strlen(pathname);g >= 0;g--)
     {
         if (pathname[g] == '/')
         {
             break;
         }
     }
-    for( ; g <strlen(pathname) ;g++)
+    for( ;g <strlen(pathname);g++)
     {
         SHM_NAME[temp] = pathname[g];
         temp++;
     }
-    // printf("SHM_NAME  %s \n",SHM_NAME);
     int fd;
     sem_t *sem;
     
@@ -107,22 +106,22 @@ void set_map(const char *pathname)
     umask(old_umask);
     if (fd < 0 || sem == SEM_FAILED)
     {
-        printf("shm_open or sem_open failed...\n");
-        printf("%s",strerror(errno));
+        perror("shm_open or sem_open failed...\n");
+        perror(strerror(errno));
         return ;
     }
     orig_f_ftruncate orig_ftruncate;
     orig_ftruncate = (orig_f_ftruncate)dlsym(RTLD_NEXT, "ftruncate");
     int ftr_fd = orig_ftruncate(fd, 1024 * 1024 * 1024);
-    if(ftr_fd == -1)
+    if (ftr_fd == -1)
     {
-        printf("%s\n",strerror(errno));
+        perror(strerror(errno));
     }
     char *memPtr;
     memPtr = (char *)mmap(NULL,1024 * 1024 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED , fd, 0);
-    if(memPtr == (char *)-1)
+    if (memPtr == (char *)-1)
     {
-        printf("%s\n",strerror(errno));
+        perror(strerror(errno));
     }
     orig_open_f_type orig_open;
     orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
@@ -132,18 +131,17 @@ void set_map(const char *pathname)
     unsigned long long number = get_file_size(pathname);
     unsigned long long numbern = 0;
     unsigned long long number_temp = 0;
-    memset(buf, '\0', sizeof(buf));
+    memset(buf,'\0',sizeof(buf));
     while (numbern != number)
     {
-        memset(buf, '\0', sizeof(buf));
-        number_temp = readn(test_fd, buf, sizeof(buf));
+        memset(buf,'\0',sizeof(buf));
+        number_temp = readn(test_fd,buf,sizeof(buf));
         numbern += number_temp;
         strcat(buf,"\0");
-        if (memmove(memPtr, buf, sizeof(buf)) == (void *)-1)
+        if (memmove(memPtr,buf,sizeof(buf)) == (void *)-1)
         {
-            printf("%s\n",strerror(errno));
+            perror(strerror(errno));
         }
-        // printf("%s\n",buf);
         memPtr += number_temp;
     }
     sem_post(sem);
@@ -160,7 +158,6 @@ void send_link(const char * pathname,int t)
     msg_mbuf.mtype = 0;
     memset(msg_mbuf.mtext, 0, sizeof(msg_mbuf.mtext));
     strcpy(msg_mbuf.mtext,pathname);
-  //  printf("pathname    %s\n",msg_mbuf.mtext);
     msg_id = msgget(key, msg_flags | 0666);
     if (-1 == msg_id)
     {
@@ -184,12 +181,12 @@ int recv_keep_valie()
     /*创建一个消息队列 */
     if (-1 == msg_id)
     {
-        printf("error create\n");
+        return -1;
     }
-    ret = msgrcv(msg_id, (void *)&msg_mbuf, 1024, 0,0);
+    ret = msgrcv(msg_id, (void *)&msg_mbuf, 1024, 0,IPC_NOWAIT);
     if (-1 == ret)
     {
-        return 0;
+        return -1;
     }
     if(msg_mbuf.mtext[0] == '1')
     {
@@ -208,7 +205,7 @@ int open(const char *pathname, int flags, ...)
 {
     if(recv_keep_valie() == 0)
     {
-        printf("error your no permission\n");
+        perror("error your no permission\n");
         return -1;
     }
     /* Some evil injected code goes here. */
@@ -226,7 +223,7 @@ int open(const char *pathname, int flags, ...)
     orig_open_f_type orig_open;
     orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
     get_path();
-    if (strncmp(filename_path, resolved_path, strlen(filename_path) - 1) == 0)
+    if (strncmp(filename_path, resolved_path,strlen(filename_path)-1) == 0)
     {
       if (per_flag == 0)
       res = orig_open(resolved_path, flags);
@@ -271,7 +268,7 @@ int close(int fd)
 { 
     if(recv_keep_valie() == 0)
     {
-        printf("error your no permission\n");
+        perror("error your no permission\n");
         return -1;
     }
     char temp_buf[1024] = {'\0'};
