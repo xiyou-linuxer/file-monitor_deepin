@@ -231,8 +231,10 @@ int open(const char *pathname, int flags, ...)
       res = orig_open(resolved_path, flags, third_agrs);
       if (res > 0) 
       {
-        char temp_buf[1024] = {'\0'};
-        char file_path[1024] = {'0'}; // PATH_MAX in limits.h
+        char temp_buf[1024] ;
+        char file_path[1024] ; // PATH_MAX in limits.h
+        temp_buf[0] = '\0';
+        file_path[0] = '\0';
         snprintf(temp_buf, sizeof(temp_buf), "/proc/self/fd/%d", res);
         orig_readlink orig_read_link;
         orig_read_link = (orig_readlink)dlsym(RTLD_NEXT, "readlink");
