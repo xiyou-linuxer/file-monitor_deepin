@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-char  SHM_NAME[256];
+char  SHM_NAME[1024];
 #define SHM_NAME_SEM "/memmap_sem"
 #define FILE_PATH    "/home/kiosk/TCP_test/example/inotify/file-monitor_deepin/etc/init.conf"
 char inotify_name[1024];
@@ -38,20 +38,17 @@ typedef int (*orig_f_ftruncate)(int fd, off_t length);
 int writen(int fd, const void *vptr, int n);
 int readn(int fd, void *vptr, int n);
 void get_path() {
-  static void *handle = NULL;
+
   orig_open_f_type orig_open;
   orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
 
   //打开配置文件
   int fd = orig_open(FILE_PATH, O_RDWR);
-  if (fd < 0) {
-    exit(0);
-  }
   //读取配置文件
   char c[200];
   bzero(c, sizeof(c));
   readn(fd, c, sizeof(c));
-
+  
   const int j = strlen(c);
 
   for (int i = 0; i < j; i++) {
@@ -60,11 +57,12 @@ void get_path() {
   }
   for (int i = 0; i < j - 1; i++) {
     if (strncmp(&c[i], "path:", 5) == 0) {
-        strcpy(filename_path, &c[i + 5]);
-        continue;
+      strcpy(filename_path, &c[i + 5]);
+      continue;
     }
   }
   //关闭配置文件
+ 
   orig_close_f_type orig_close;
   orig_close = (orig_close_f_type)dlsym(RTLD_NEXT, "close");
   orig_close(fd);
@@ -82,6 +80,7 @@ unsigned long get_file_size(const char *path) {
 }
 void set_map(const char *pathname)
 {
+
     int temp = 0;
     int g = 0;
     for(g = strlen(pathname);g >= 0;g--)
@@ -96,6 +95,7 @@ void set_map(const char *pathname)
         SHM_NAME[temp] = pathname[g];
         temp++;
     }
+
     int fd;
     sem_t *sem;
     
@@ -132,13 +132,14 @@ void set_map(const char *pathname)
     unsigned long long numbern = 0;
     unsigned long long number_temp = 0;
     memset(buf,'\0',sizeof(buf));
+
     while (numbern != number)
     {
         memset(buf,'\0',sizeof(buf));
         number_temp = readn(test_fd,buf,sizeof(buf));
         numbern += number_temp;
         strcat(buf,"\0");
-        if (memmove(memPtr,buf,sizeof(buf)) == (void *)-1)
+        if (memmove(memPtr ,buf,sizeof(buf)) == (void *)-1)
         {
             perror(strerror(errno));
         }
@@ -149,7 +150,6 @@ void set_map(const char *pathname)
 }
 void send_link(const char * pathname,int t)
 {
-
     int msg_id, msg_flags;
     struct msqid_ds msg_info;
     struct msgmbuf msg_mbuf;
@@ -164,7 +164,6 @@ void send_link(const char * pathname,int t)
         return ;
     }
     msg_mbuf.mtype = get_file_size(pathname);
-    printf("mtype  %d\n",msg_mbuf.mtype);
     msgsnd(msg_id, (void*)&msg_mbuf, 1024, IPC_NOWAIT);
 }
 int recv_keep_valie()
@@ -183,43 +182,44 @@ int recv_keep_valie()
     {
         return -1;
     }
-    ret = msgrcv(msg_id, (void *)&msg_mbuf, 1024, 0,IPC_NOWAIT);
+    ret = msgrcv(msg_id, (void *)&msg_mbuf, 1024, 0, IPC_NOWAIT);
     if (-1 == ret)
     {
         return -1;
     }
-    if(msg_mbuf.mtext[0] == '1')
+    if (strcmp(msg_mbuf.mtext, "1") == 0)
     {
-      ret = msgctl(key, IPC_RMID, NULL);
-      return 1;
+        flag = msgctl(msg_id, IPC_RMID, NULL);
+        return 1;
     }
-    else
+    if(strcmp(msg_mbuf.mtext,"0") == 0)
     {
-      ret = msgctl(key, IPC_RMID, NULL);
-      return 0;
+        flag = msgctl(msg_id, IPC_RMID, NULL);
+        return 0;
     }
- 
+    return -1;
 }
 
 int open(const char *pathname, int flags, ...)
 {
-    if(recv_keep_valie() == 0)
-    {
-        perror("error your no permission\n");
-        return -1;
-    }
+    // if(recv_keep_valie() == 0)
+    // {
+    //     perror("error your no permission\n");
+    //     return -1;
+    // }
     /* Some evil injected code goes here. */
-   int res = 0;
-   char resolved_path[100];
-   va_list ap; //可变参数列表
-   va_start(ap, flags);
-   mode_t third_agrs = va_arg(ap, mode_t);
-   if (third_agrs >= 0 && third_agrs <= 0777)
-   {
+    int res = 0;
+    char resolved_path[128];
+    va_list ap; //可变参数列表
+    va_start(ap, flags);
+    mode_t third_agrs = va_arg(ap, mode_t);
+    if (third_agrs >= 0 && third_agrs <= 0777)
+    {
        per_flag = 1;
     }
     va_end(ap);
     memset(filename_path,'\0',sizeof(filename_path));
+    memset(resolved_path,'\0',sizeof(resolved_path));
     realpath(pathname,resolved_path);
     orig_open_f_type orig_open;
     orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
@@ -232,8 +232,10 @@ int open(const char *pathname, int flags, ...)
       res = orig_open(resolved_path, flags, third_agrs);
       if (res > 0) 
       {
-        char temp_buf[1024] ={0};
-        char file_path[1024] ={'\0'}; // PATH_MAX in limits.h
+        char temp_buf[1024] ;
+        char file_path[1024] ; // PATH_MAX in limits.h
+        memset(file_path, '\0', sizeof(file_path));
+        memset(temp_buf, '\0', sizeof(temp_buf));
         snprintf(temp_buf, sizeof(temp_buf), "/proc/self/fd/%d", res);
         orig_readlink orig_read_link;
         orig_read_link = (orig_readlink)dlsym(RTLD_NEXT, "readlink");
@@ -267,11 +269,11 @@ int open(const char *pathname, int flags, ...)
 
 int close(int fd)
 { 
-    if(recv_keep_valie() == 0)
-    {
-        perror("error your no permission\n");
-        return -1;
-    }
+    // if(recv_keep_valie() == 0 || fd == -1)
+    // {
+    //     perror("error your no permission\n");
+    //     return -1;
+    // }
     char temp_buf[1024] = {'\0'};
     char file_path[1024] = {'0'}; // PATH_MAX in limits.h
     snprintf(temp_buf, sizeof(temp_buf), "/proc/self/fd/%d", fd);
