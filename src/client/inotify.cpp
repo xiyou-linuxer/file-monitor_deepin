@@ -1,36 +1,43 @@
 #include "ini.h"
 #include "ip.hpp"
 #include "main.hpp"
-#include "threadpool.hpp"
+#include "get_message.h"
 struct data head_file; /*心跳包和recv中的函数 */
 
 void *heart_handler(struct data *head_file, int sockfd, int keep_alive_flag)
 {
     while (1) {
-	if (head_file->count == 3)	// 3s*5没有收到心跳包，判定服务端掉线
-	{
-	    cout << "The server has be offline.\n";
-	    close(sockfd);
-	    Send_keep_alive('0');
-	    keep_alive_flag = 0;
-		const char *ip = "192.168.28.164";
-		int port = 8888;
-		struct sockaddr_in server_address;
-		bzero(&server_address, sizeof(server_address));
-		server_address.sin_family = AF_INET;
-		inet_pton(AF_INET, ip, &server_address.sin_addr);
-		server_address.sin_port = htons(port);
-		int sockfd = socket(PF_INET, SOCK_STREAM, 0);
-		if (connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+	if(keep_alive_flag == 1)
+	 {
+		if (head_file->count == 3)	// 3s*5没有收到心跳包，判定服务端掉线
 		{
+			cout << "The server has be offline.\n";
 			close(sockfd);
+			Send_keep_alive('0');
+			keep_alive_flag = 0;
+			const char *ip = "192.168.28.164";
+			int port = 8888;
+			struct sockaddr_in server_address;
+			bzero(&server_address, sizeof(server_address));
+			server_address.sin_family = AF_INET;
+			inet_pton(AF_INET, ip, &server_address.sin_addr);
+			server_address.sin_port = htons(port);
+			int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+			if (connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+			{
+				close(sockfd);
+				head_file->count = 0;
+			}
+			else
+			{
+				keep_alive_flag = 1;
+			}
+		} else if (head_file->count < 3 && head_file->count >= 0) {
+			head_file->count += 1;
 		}
-	} else if (head_file->count < 5 && head_file->count >= 0) {
-		cout << "heart_handler "  << head_file->count << endl;
-	    head_file->count += 1;
-	}
-	sleep(3);		// 定时三秒
-    }
+		sleep(3);		// 定时三秒
+	 }
+   }
 }
 
 void Recv_file(int sockfd, int keep_alive_flag)
@@ -41,31 +48,34 @@ void Recv_file(int sockfd, int keep_alive_flag)
 	while (1) {
 	    memset(&head_file, 0, sizeof(head_file));
 	    int res = recv(sockfd, &head_file, sizeof(struct data), 0);
-		cout << "recv  . . . .   "  << endl;
-	    count += head_file.length;
+            count += head_file.length;
 	    if (res < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
 		    continue;
 		cout << strerror(errno) << endl;
 	    }
-	    cout << "recv_name  " << head_file.file_name << endl;
+		if(res == 0)
+		{
+			Send_keep_alive('0');
+			keep_alive_flag = 0;
+		}
 	    if (head_file.sign == 4) {	/*心跳包的标志位 */
-		head_file.count = 0;
-	    } else {
-
-		ofstream out;
-
-		if (count <= 4096) {
+			head_file.count = 0;
+	    } 
+		else
+		{
+		  ofstream out;
+		  if (count <= 4096) {
 		    out.open(head_file.file_name, ios::trunc);
 		    out << head_file.file_contents;
 		    out.close();
 		    count = 0;
-		} else {
+		  } else {
 		    out.open(head_file.file_name, ios::app | ios::out);
 		    out.seekp(count, ios::beg);
 		    out << head_file.file_contents;
 		    out.close();
-		}
+		  }
 	    }
 	}
     }
@@ -80,8 +90,7 @@ int handle_events(int epollfd, int fd, int argc, char *argv[], struct filename_f
 	char buffer_temp[1024];
 	char buf[2048];
 	struct inotify_event *events;
-	do_thing temp;
-	std::threadpool executor{20};
+	do_thing *temp = new do_thing();
 	memset(buf, 0, sizeof(buf));
 	len = read(fd, buf, sizeof(buf));
 	for (ptr = buf; ptr < buf + len;
@@ -115,11 +124,9 @@ int handle_events(int epollfd, int fd, int argc, char *argv[], struct filename_f
 				{
 					return -1;
 				}
-				// cout << "create file" << endl;
 				FileArray[array_index].fd = temp_fd;
 				addfd(epollfd, temp_fd, false);
 				array_index++;
-				cout << "add file   " << events->name << endl;
 			}
 			if (events->mask & IN_DELETE)
 			{ /* 如果是删除文件也是打印文件名 */
@@ -131,31 +138,28 @@ int handle_events(int epollfd, int fd, int argc, char *argv[], struct filename_f
 						FileArray[i].fd = 0;
 						memset(FileArray[i].name, 0, sizeof(FileArray[i].name));
 						memset(FileArray[i].base_name, 0, sizeof(FileArray[i].base_name));
-						printf("delete file to epoll %s\n", events->name);
 						break;
 					}
 				}
-				cout << "delete file   " << events->name << endl;
 			}
 		}
 		if ((strcmp(buffer, "open file") == 0))
 		{
 			strcat(buffer, events->name);
-			executor.commit(temp.Open_task, sockfd, buffer, events->name);
-		}
-
+            thread t1(temp->Open_task, sockfd, buffer, events->name);
+			t1.join();
+        }
 		if ((strcmp(buffer_temp, "close file") == 0))
 		{
-			cout << "close _ events" << endl;
 			strcat(buffer_temp, events->name);
-			executor.commit(temp.Close_task, sockfd, buffer_temp);
+			thread t2(temp->Close_task,sockfd,buffer_temp);
+			t2.join();
 		}
 	}
 }
 int main(int argc, char **argv)
 { 
     const char *ip = "192.168.28.164";
-    //const char *ip = "127.0.0.1";
     int port = 8888;
     int keep_alive_flag = 1;
     struct sockaddr_in server_address;
@@ -169,6 +173,7 @@ int main(int argc, char **argv)
     server_address.sin_port = htons(port);
 
     int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+
     int fd, i, epollfd, wd;
     char readbuf[1024];
     epollfd = epoll_create(8);
@@ -191,7 +196,6 @@ int main(int argc, char **argv)
     }
     thread t1(Recv_file, sockfd, keep_alive_flag);
     thread t2(heart_handler, &head_file, sockfd, keep_alive_flag);
-
     while (1) {
 	int ret = epoll_wait(epollfd, Epollarray, 32, -1);
 
