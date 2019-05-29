@@ -2,7 +2,6 @@
 #ifndef MAIN_HPP
 #define MAIN_HPP
 /* code */
-#include "threadpool.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cstring>
@@ -25,11 +24,14 @@
 #include <sys/types.h>
 #include <thread>
 #include <unistd.h>
+#include <mutex>
+#include <string.h>
 #include "ip.hpp"
+#include "get_message.h"
 using namespace std;
 #define SHM_NAME_SEM "/memmap_sem"
 char SHM_NAME[256];
-const char *base_dir;
+
 int array_index = 0;
 int temp_flag = 0;
 
@@ -48,14 +50,25 @@ struct msgmbuf
 
 struct data
 {
-    int sign ;
-    char mac[18];
-    char file_name[256];
-    int length;
-    char file_contents[4096];
-    char events[256];
-    int count;//心跳包标志
-    int file_sign; //大文件的标识位
+  long left;
+  long right;
+  int count;     //心跳包标志
+  int sign;
+  char mac[18];
+  char file_name[256];
+  int  length;
+  char file_contents[4096];
+  char events[256];
+};
+struct recv_data
+{
+  char count; //心跳包标志
+  char sign;
+  char mac[18];
+  char file_name[256];
+  char file_contents[4096];
+  char events[256];
+  char length[256];
 };
 int readn(int fd, void *vptr, int n)
 {
@@ -123,7 +136,7 @@ class do_thing
 {
 private:
   /*获取文件路径长度*/
-  static int Send_img(int sockfd, struct data *open_file, int t)
+  static int Send_img(int sockfd, struct data *open_file,int t)
   {
     int ret = -1;
     int msg_flags, msg_id;
@@ -174,14 +187,17 @@ private:
 
     return 0;
   }
+ 
 
-  public:
+public:
   /*多线程发送文件*/
   static void TransFile( struct data *open_file)
   {
-    cout << open_file->file_contents ;
-    const char *ip = "192.168.28.164";
-    int port = 8888;
+    char ip[32];
+    int port = 0;
+    get_ip_addr(ip,&port);
+    //const char *ip = "192.168.28.164";
+    // int port = 8888;
     struct sockaddr_in server_address;
     bzero(&server_address, sizeof(server_address));
     server_address.sin_family = AF_INET;
@@ -194,10 +210,15 @@ private:
     }
     else
     {
-      int res = send(sockfd, open_file, sizeof(struct data), 0);
-      if (res == -1)
-      {
-        cout << strerror(errno) << endl;
+      mutex mtx;
+      if (mtx.try_lock() && strlen(open_file->file_contents) > 0 )
+      { // only increase if currently not locked:  
+        int res = send(sockfd, open_file, sizeof(struct data), 0);
+        if (res == -1)
+        {
+         cout << strerror(errno) << endl;
+        }
+        mtx.unlock();
       }
       close(sockfd);
     }
@@ -235,49 +256,25 @@ private:
     memset(open_file->file_contents, '\0', sizeof(open_file->file_contents));
     //多线程发送
     int n = (open_file->length / 4096 + 1); /*设置10分 */
-    size_t percent = 4096;
+    size_t percent = 4095;
     struct data blocks[n];
- 
-    for (int temp = 0; temp < n; temp++)
+    for (int temp = 0; temp < n ; temp++)
     {
-      blocks[temp].file_sign = temp;
+      memset(&blocks[temp].file_contents,'\0',sizeof(blocks[temp].file_contents));
       strcpy(blocks[temp].file_name, open_file->file_name);
+      blocks[temp].left = temp * percent;
+      cout << blocks[temp].file_name << endl;
       strcpy(blocks[temp].mac, open_file->mac);
       blocks[temp].length = open_file->length;
       strcpy(blocks[temp].events, open_file->events);
-      memmove(blocks[temp].file_contents, memPtr + temp * percent, sizeof(blocks[temp].file_contents));
+      memmove(blocks[temp].file_contents, memPtr + temp * percent, sizeof(blocks[temp].file_contents) - 1);
+      blocks[temp].right = temp * percent + strlen(blocks[temp].file_contents);
     }
-    std::threadpool executor1{20};
+    thread t1[n];
     for (int i = 0; i < n; ++i)
-    {
-      executor1.commit(TransFile,&blocks[i]);
-    }
-    cout << endl;
-    // for (int i = 0; i < (open_file->length /4096 + 1)*4096; i++) {
-    //   if (i % 4096 == 0) {
-    //     if (strlen(open_file->file_contents) > 0) {
-
-    //         int res = send(sockfd, open_file, sizeof(struct data), 0);
-    //         if (res == -1)
-    //         {
-    //             cout << strerror(errno) << endl;
-    //       }
-    //     }
-    //     memset(open_file->file_contents, '\0',
-    //            sizeof(open_file->file_contents));
-    //     temp = 0;
-    //   }
-    //   open_file->file_contents[temp] = memPtr[i];
-    //   temp++;
-    // }
-    // if(temp > 0)
-    // {
-    //     int res = send(sockfd, open_file, sizeof(struct data), 0);
-    //     if (res == -1)
-    //     {
-    //         cout << strerror(errno) << endl;
-    //     }
-    // }
+        t1[i] = thread(TransFile,&blocks[i]);
+    for(auto & th:t1)
+        th.join();  
     sem_post(sem);
     sem_close(sem);
     munmap(memPtr, fileStat.st_size);
@@ -291,11 +288,10 @@ public:
     struct data open_file;
     open_file.sign = 0; //标志发送文件的请求
     strcpy(open_file.events, buffer);
-    if (Send_img(sockfd, &open_file, 1024) == 1)
-    {
+    if (Send_img(sockfd, &open_file,1024) == 1)
+    { 
       cout << "open_task begin   " << endl;
       IP real;
-
       real.getLocalInfo();
       strcpy(open_file.mac, real.real_mac);
       /*获取ip的大小，并且发送文件内容 */
@@ -305,12 +301,10 @@ public:
 public:
   static void Close_task(int sockfd, char *buffer)
   {
-
     struct data close_file;
-
     close_file.sign = 1; //标志接受文件的请求
     strcpy(close_file.events, buffer);
-    if (Send_img(sockfd, &close_file, 1025) == 1)
+    if (Send_img(sockfd, &close_file,1025) == 1)
     {
       cout << "close_task begin   " << endl;
       IP real;
@@ -319,7 +313,10 @@ public:
       strcpy(close_file.mac, real.real_mac);
       cout << "mac         " << close_file.mac << endl;
       /*获取ip的大小，并且发送文件内容 */
-      send(sockfd, &close_file, sizeof(struct data), 0);
+      if( send(sockfd, &close_file, sizeof(struct recv_data), 0) < 0)
+      {
+        perror("send error 298");
+      }
     }
   }
 };
