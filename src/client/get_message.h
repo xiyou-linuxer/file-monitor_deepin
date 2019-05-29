@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#define FILE_PATH "/home/kiosk/TCP_test/example/inotify/file-monitor_deepin/etc/init.conf"
+#define FILE_PATH "/etc/file_watch/init.conf"
 
 char filename_path[256];
 int reads(int fd, void *vptr, int n) ;
