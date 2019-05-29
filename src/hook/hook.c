@@ -20,7 +20,7 @@
 
 char  SHM_NAME[1024];
 #define SHM_NAME_SEM "/memmap_sem"
-#define FILE_PATH    "/home/kiosk/TCP_test/example/inotify/file-monitor_deepin/etc/init.conf"
+#define FILE_PATH "/etc/file_watch/init.conf"
 char inotify_name[1024];
 int per_flag = 0;
 struct msgmbuf
