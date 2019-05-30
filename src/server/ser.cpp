@@ -9,10 +9,12 @@
 #include <stdlib.h>
 #include <cassert>
 #include <sys/epoll.h>
-
+#include <mutex>
 #include "locker.h"
 #include "threadpool.h"
 #include "monitor.h"
+
+#include "log/log.cpp"
 
 #define MAX_FD 1024       ///
 #define MAX_EVENT_NUMBER 10000
@@ -35,6 +37,9 @@ void addsig( int sig, void( handler )(int),bool restart = true )
 
 int main(int argc,char **argv)
 {
+    Log::get_instance()->init("./mylog.log",8192,2000000,0);      //日志
+
+
     if(argc <= 2)
     {
         printf("errno ... ...\n");
@@ -76,7 +81,7 @@ int main(int argc,char **argv)
     ret = bind(listenfd, (struct sockaddr*)&address, sizeof(address ) );
     assert(ret >= 0);
 
-    ret = listen(listenfd,5 );
+    ret = listen(listenfd,20 );
     assert(ret >= 0);
 
     epoll_event events[MAX_EVENT_NUMBER];
@@ -118,7 +123,9 @@ int main(int argc,char **argv)
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
             {
                 //如果出现异常
+                LOG_ERROR("EPOLLREHUO|EPOLLHUP|EPOLLERR  sockfd =%d",sockfd);
                 std::cout << "EPOLLREHUO|EPOLLHUP|EPOLLERR" << std::endl;
+                //pthread_cancel((users+sockfd)->id);
                 close(sockfd);  
             }
             else if(events[i].events & EPOLLIN )
@@ -127,7 +134,13 @@ int main(int argc,char **argv)
                 printf(">>>>[this epoll IN!]<<<<\n");
                 std::cout << "^^^^"<<std::endl;
                 std::cout << ">>[before append][epool in]>>sockfd :" << sockfd << std::endl;
+                //std::mutex mtx;
+                //mtx.try_lock();
+                LOG_INFO("deal with the client(%d)",sockfd);
+                Log::get_instance()->flush();
                 pool->append( users + sockfd );
+                //mtx.unlock();
+                //users[sockfd].process();
                // users[sockfd].close_mon();
             }
             else if(events[i].events & EPOLLOUT )
