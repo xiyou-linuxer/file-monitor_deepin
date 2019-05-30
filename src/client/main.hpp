@@ -185,8 +185,6 @@ class do_thing {
 	int port = 0;
 
 	get_ip_addr(ip, &port);
-	//const char *ip = "192.168.28.164";
-	// int port = 8888;
 	struct sockaddr_in server_address;
 
 	bzero(&server_address, sizeof(server_address));
@@ -248,7 +246,6 @@ class do_thing {
 	    memset(&blocks[temp].file_contents, '\0', sizeof(blocks[temp].file_contents));
 	    strcpy(blocks[temp].file_name, open_file->file_name);
 	    blocks[temp].left = temp * percent;
-	    cout << blocks[temp].file_name << endl;
 	    strcpy(blocks[temp].mac, open_file->mac);
 	    blocks[temp].length = open_file->length;
 	    strcpy(blocks[temp].events, open_file->events);
