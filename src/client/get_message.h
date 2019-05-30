@@ -16,9 +16,10 @@ int reads(int fd, void *vptr, int n);
 void get_ip_addr(char ip[], int *port)
 {
     //打开配置文件
-    int fd = open(FILE_PATH, O_RDWR);
+    int fd = open(FILE_PATH,O_RDONLY);
 
     if (fd < 0) {
+	perror("read error");
 	exit(0);
     }
     //读取配置文件

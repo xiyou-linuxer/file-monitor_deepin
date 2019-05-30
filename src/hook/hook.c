@@ -45,8 +45,11 @@ void get_path()
     orig_open = (orig_open_f_type) dlsym(RTLD_NEXT, "open");
 
     //打开配置文件
-    int fd = orig_open(FILE_PATH, O_RDWR);
-
+    int fd = orig_open(FILE_PATH, O_RDONLY);
+    if(fd < 0)
+    {
+        perror("read error");
+    }
     //读取配置文件
     char c[200];
 
@@ -208,10 +211,10 @@ int recv_keep_valie()
 
 int open(const char *pathname, int flags, ...)
 {
-    if (recv_keep_valie() == 0) {
-	perror("error your no permission\n");
-	return -1;
-    }
+    // if (recv_keep_valie() == 0) {
+	// perror("error your no permission\n");
+	// return -1;
+    // }
     /* Some evil injected code goes here. */
     int res = 0;
     char resolved_path[128];
@@ -276,10 +279,10 @@ int open(const char *pathname, int flags, ...)
 
 int close(int fd)
 {
-    if (recv_keep_valie() == 0 || fd == -1) {
-	perror("error your no permission\n");
-	return -1;
-    }
+    // if (recv_keep_valie() == 0 || fd == -1) {
+	// perror("error your no permission\n");
+	// return -1;
+    // }
     char temp_buf[1024] = { '\0' };
     char file_path[1024] = { '0' };	// PATH_MAX in limits.h
     snprintf(temp_buf, sizeof(temp_buf), "/proc/self/fd/%d", fd);

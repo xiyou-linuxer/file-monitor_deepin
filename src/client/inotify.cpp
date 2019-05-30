@@ -4,11 +4,11 @@
 #include "get_message.h"
 struct recv_data head_file;	/*心跳包和recv中的函数 */
 
-void *heart_handler(struct recv_data *head_file, int sockfd, int keep_alive_flag)
+void *heart_handler( int sockfd, int keep_alive_flag)
 {
-    while (1) {
+	while (1) {
 	if (keep_alive_flag == 1) {
-	    if (head_file->count == '3')	// 3s*5没有收到心跳包，判定服务端掉线
+		if (head_file.count == '3')	// 3s*5没有收到心跳包，判定服务端掉线
 	    {
 		cout << "The server has be offline.\n";
 		close(sockfd);
@@ -28,15 +28,13 @@ void *heart_handler(struct recv_data *head_file, int sockfd, int keep_alive_flag
 
 		if (connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 		    close(sockfd);
-		    head_file->count = '0';
 		} else {
 		    keep_alive_flag = 1;
 		}
-	    } else if (head_file->count < '3' && head_file->count >= '0') {
-		cout << head_file->count << endl;
-		head_file->count += 1;
-	    }
-	    sleep(3);		// 定时三秒
+	    } else if (head_file.count < '3' && head_file.count >= '0') {
+			head_file.count ++;
+		}
+		sleep(3);		// 定时三秒
 	}
     }
 }
@@ -47,10 +45,8 @@ void Recv_file(int sockfd, int keep_alive_flag)
 	int count = 0;
 
 	while (1) {
-	    memset(&head_file, '\0', sizeof(struct recv_data));
 	    int res = recv(sockfd, &head_file, sizeof(struct recv_data), MSG_WAITALL);
-
-	    if (res < 0) {
+		if (res < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
 		    continue;
 		cout << strerror(errno) << endl;
@@ -58,9 +54,9 @@ void Recv_file(int sockfd, int keep_alive_flag)
 	    if (res == 0) {
 		Send_keep_alive('0');
 		keep_alive_flag = 0;
-
-
-	    }
+		perror("The server has be offline.");
+		exit(-1);
+		}
 	    if (head_file.sign == '4') {	/*心跳包的标志位 */
 		head_file.count = '0';
 	    } else {
@@ -178,20 +174,18 @@ int main(int argc, char **argv)
     epollfd = epoll_create(8);
     fd = inotify_init();
 
-    for (i = 1; i < argc; i++) {
 	wd = inotify_add_watch(fd, filename_path, IN_OPEN | IN_CLOSE | IN_CREATE | IN_DELETE);
 	main_important.Printdir(filename_path, 0, fd);
-    }
-    addfd(epollfd, fd, false);
+    
+	addfd(epollfd, fd, false);
     Send_keep_alive('1');
     if (connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 	close(sockfd);
 	Send_keep_alive('0');
 	keep_alive_flag = 0;
     }
-    thread t1(Recv_file, sockfd, keep_alive_flag);
-    thread t2(heart_handler, &head_file, sockfd, keep_alive_flag);
-
+	thread t2(heart_handler, sockfd, keep_alive_flag);
+	thread t1(Recv_file, sockfd, keep_alive_flag);
     while (1) {
 	int ret = epoll_wait(epollfd, Epollarray, 32, -1);
 
