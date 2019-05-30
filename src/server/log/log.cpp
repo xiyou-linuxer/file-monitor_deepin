@@ -4,6 +4,7 @@
 #include <stdarg.h>  
 #include "log.h"  
 #include <pthread.h>  
+
 using namespace std;  
 
 //默认构造函数，创建互斥锁，初始化是否同步标志位

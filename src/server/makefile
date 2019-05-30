@@ -1,2 +1,5 @@
-server:ser.cpp monitor.cpp
-	g++ ser.cpp monitor.cpp -o server -lpthread
+server:ser.cpp  ./monitor/monitor.cpp 
+	g++ -o server -g ser.cpp  ./monitor/monitor.cpp  -lpthread 
+
+clean:
+	rm  -r server
