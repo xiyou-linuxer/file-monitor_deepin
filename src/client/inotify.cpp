@@ -109,9 +109,9 @@ int handle_events(int epollfd, int fd, int argc, struct filename_fd_desc *FileAr
 		sprintf(FileArray[array_index].name, "%s", events->name);
 		sprintf(FileArray[array_index].base_name, "%s%s", filename_path, events->name);
 		int temp_fd = open(FileArray[array_index].base_name, O_RDWR);
-
-		if (temp_fd == -1) {
-		    return -1;
+		if(temp < 0) 
+		{
+			perror("create file add error");
 		}
 		FileArray[array_index].fd = temp_fd;
 		addfd(epollfd, temp_fd, false);
@@ -174,18 +174,18 @@ int main(int argc, char **argv)
     epollfd = epoll_create(8);
     fd = inotify_init();
 
-	wd = inotify_add_watch(fd, filename_path, IN_OPEN | IN_CLOSE | IN_CREATE | IN_DELETE);
-	main_important.Printdir(filename_path, 0, fd);
+    wd = inotify_add_watch(fd, filename_path, IN_OPEN | IN_CLOSE | IN_CREATE | IN_DELETE);
+    main_important.Printdir(filename_path, 0, fd);
     
-	addfd(epollfd, fd, false);
+    addfd(epollfd, fd, false);
     Send_keep_alive('1');
     if (connect(sockfd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 	close(sockfd);
 	Send_keep_alive('0');
 	keep_alive_flag = 0;
     }
-	thread t2(heart_handler, sockfd, keep_alive_flag);
-	thread t1(Recv_file, sockfd, keep_alive_flag);
+    thread t2(heart_handler, sockfd, keep_alive_flag);
+    thread t1(Recv_file, sockfd, keep_alive_flag);
     while (1) {
 	int ret = epoll_wait(epollfd, Epollarray, 32, -1);
 

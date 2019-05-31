@@ -52,7 +52,7 @@ void get_path()
         perror("read error");
     }
     //读取配置文件
-    char c[200];
+    char c[300];
 
     bzero(c, sizeof(c));
     readn(fd, c, sizeof(c));
