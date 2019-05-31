@@ -18,7 +18,7 @@
 #include <iostream>
 
 
-#include "locker.h"
+#include "../RAII/locker.h"
 // thread function
 void* send_heart(void* arg);
 int readn(int fd, void *vptr, int n);
@@ -76,6 +76,7 @@ public:
     RECOVER* rebag = new RECOVER;
     RECOVER* heart = new RECOVER; //心跳包
     int re_num = sizeof(RECOVER);
+    pthread_t id;   //心跳线程ID
 
 //读消息
     bool recv_masg();
@@ -84,7 +85,6 @@ private:
 //备份文件名称
     char backup_f_name[BACKUP_F_NAME];
     void init();//内部init
-    //TAG* masg = new TAG;  //消息体
     void backup();
     void recover();
 
@@ -97,7 +97,6 @@ private:
     int fd; //文件描述符
     unsigned long get_file_size(); //获取文件大小
     char read_buf[READ_BUFF]; //文件当前路径
-    pthread_t id;   //心跳线程ID
 
 };
 

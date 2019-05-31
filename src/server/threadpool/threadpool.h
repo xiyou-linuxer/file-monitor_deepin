@@ -10,7 +10,7 @@
 #include <iostream>
 #include <unistd.h>
 //引用14章的介绍的线程同步机制的包装类
-#include"locker.h"
+#include"../RAII/locker.h"
 
 //线程池类，将它定义为模板类是为了代码复用.模板参数T是任务类
 template <typename T>
@@ -53,7 +53,6 @@ threadpool< T >::threadpool(int thread_number, int max_requests) :
     //创建thread_number个线程，并将它们都设置为脱离线程
     for(int i = 0;i<thread_number ;++i)
     {
-        printf("pthread%dth\n",i);
         if(pthread_create(m_threads + i,NULL,worker,this)!=0)
         {
             delete [] m_threads;
@@ -84,7 +83,6 @@ bool threadpool< T >::append(T* request)
         m_queuelocker.unlock();
         return false;
     }
-    printf(">>[threadpool]>>before push_back\n");
     m_workqueue.push_back( request );
     m_queuelocker.unlock();
     m_queuestat.post();
@@ -95,8 +93,6 @@ template< typename T >
 void* threadpool< T >::worker( void* arg)
 {
     threadpool* pool = (threadpool* )arg;
-    pthread_t pth = pthread_self();
-    //std::cout << ">>[work]threadpool ID = " << pth << std::endl;
     pool->run();
     return pool;
 }
@@ -106,7 +102,6 @@ void threadpool< T >::run()
 {
     while( ! m_stop )
     {
-       // printf("2222\n");
         m_queuestat.wait();
         m_queuelocker.lock();
         if(m_workqueue.empty())
@@ -114,24 +109,14 @@ void threadpool< T >::run()
             m_queuelocker.unlock();
             continue;
         }
-        printf(">>[threadpool]>>before front\n");
-        pthread_t pth = pthread_self();
-        std::cout << ">>[run]threadpool ID = " << pth << std::endl;
         T* request = m_workqueue.front();
-        //加点标记！！
-        printf(">>[threadpool]>>workqueue.front done\n");
         m_workqueue.pop_front();
         m_queuelocker.unlock();
         if(! request )
         {
             continue;
         }
-        printf(">>[threadpool]>>before precess\n");
-        std::mutex mtx;
-        //mtx.try_lock();
         request->process();
-        //mtx.unlock();
-        //request->backup();
     }
 }
 #endif

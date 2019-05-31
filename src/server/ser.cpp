@@ -10,12 +10,11 @@
 #include <cassert>
 #include <sys/epoll.h>
 #include <mutex>
-#include "locker.h"
-#include "threadpool.h"
-#include "monitor.h"
+#include "RAII/locker.h"
+#include "threadpool/threadpool.h"
+#include "monitor/monitor.h"
 
 #include "log/log.cpp"
-
 #define MAX_FD 1024       ///
 #define MAX_EVENT_NUMBER 10000
 
@@ -38,7 +37,6 @@ void addsig( int sig, void( handler )(int),bool restart = true )
 int main(int argc,char **argv)
 {
     Log::get_instance()->init("./mylog.log",8192,2000000,0);      //日志
-
 
     if(argc <= 2)
     {
@@ -67,7 +65,12 @@ int main(int argc,char **argv)
     int user_count = 0;
 
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
-    assert(listenfd >= 0);
+    if(listenfd < 0)
+    {
+        LOG_ERROR("Creat Socket Failed",0);
+        Log::get_instance()->flush();
+        exit(1);
+    }
     struct linger tmp = { 1 , 0 };
     setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&tmp,sizeof(tmp));      //端口复用
  
@@ -78,16 +81,24 @@ int main(int argc,char **argv)
     inet_pton(AF_INET,ip,&address.sin_addr );
     address.sin_port = htons(port);
     
-    ret = bind(listenfd, (struct sockaddr*)&address, sizeof(address ) );
-    assert(ret >= 0);
+    if(-1 == (bind(listenfd, (struct sockaddr*)&address, sizeof(address))))
+    {
 
-    ret = listen(listenfd,20 );
-    assert(ret >= 0);
+        LOG_ERROR( "Server Bind Failed!",0);
+        Log::get_instance()->flush();
+        exit(1);
+    }
+
+    if(-1 == listen(listenfd, 50))
+    {
+        LOG_ERROR("Server Listen Failed! [fd=%d]",listenfd);
+        Log::get_instance()->flush();
+        exit(1);
+    }
 
     epoll_event events[MAX_EVENT_NUMBER];
     int epollfd = epoll_create(5);
     assert(epollfd != -1);
-    std::cout << "[listen fd]:" << ret << std::endl; 
     addfd( epollfd, listenfd, false );
     monitor::m_epollfd = epollfd;
     
@@ -96,7 +107,9 @@ int main(int argc,char **argv)
         int number = epoll_wait(epollfd,events,MAX_EVENT_NUMBER, -1);
         if( (number < 0)&& (errno != EINTR) )
         {
-            printf("epoll failure\n");
+            LOG_ERROR("epoll Failed! [fd=%d]",listenfd);
+            Log::get_instance()->flush();
+            
             break;
         }
 
@@ -111,12 +124,10 @@ int main(int argc,char **argv)
                                     &client_addrlength );
                 if(connfd < 0)
                 {
-                    printf("errno is:%d\n",errno);
+                    LOG_ERROR(" accept errno [fd=%d]",listenfd);
+                    Log::get_instance()->flush();
                     continue;
                 }
-                //(if 到达最大文件数)
-                //server is busy
-                //countinue
                 std::cout << "[acceptfd]connfd = :" << connfd << std::endl;
                 users[connfd].init(connfd, client_address);
             }
@@ -124,24 +135,15 @@ int main(int argc,char **argv)
             {
                 //如果出现异常
                 LOG_ERROR("EPOLLREHUO|EPOLLHUP|EPOLLERR  sockfd =%d",sockfd);
-                std::cout << "EPOLLREHUO|EPOLLHUP|EPOLLERR" << std::endl;
-                //pthread_cancel((users+sockfd)->id);
+                Log::get_instance()->flush();
+                pthread_cancel((users+sockfd)->id);
                 close(sockfd);  
             }
             else if(events[i].events & EPOLLIN )
             {
-                std::cout <<"^^^^"<<std::endl;
-                printf(">>>>[this epoll IN!]<<<<\n");
-                std::cout << "^^^^"<<std::endl;
-                std::cout << ">>[before append][epool in]>>sockfd :" << sockfd << std::endl;
-                //std::mutex mtx;
-                //mtx.try_lock();
                 LOG_INFO("deal with the client(%d)",sockfd);
                 Log::get_instance()->flush();
                 pool->append( users + sockfd );
-                //mtx.unlock();
-                //users[sockfd].process();
-               // users[sockfd].close_mon();
             }
             else if(events[i].events & EPOLLOUT )
             {
