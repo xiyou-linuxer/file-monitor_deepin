@@ -74,8 +74,6 @@ void monitor::init(int sockfd, const sockaddr_in& addr)
 }
 void monitor::init()
 {
-    std::cout << "[private:init]this is init" << std::endl;
-
     masg->left = 0;
     masg->right = 0;
     masg->sign = 0;
@@ -85,12 +83,11 @@ void monitor::init()
     memset(masg->data,'\0',BUFF_SIZE);
     memset(masg->event,'\0',EVENT_BUFF);
     memset(backup_f_name,'\0',BACKUP_F_NAME);
-    std::cout << " sizeof TAG " << sizeof(TAG) << std::endl;
     pthread_t id;
     int ret = pthread_create(&id, NULL, send_heart, (void*)this);
     if(ret != 0)
     {
-        std::cout << "Can not create thread!";
+        LOG_ERROR("Can not create thread!",0);
         exit(1);
     }  
 }
@@ -99,23 +96,19 @@ void monitor::process()
 
      while (1)
      {   
-        printf("..[recv_masg]>>While bigan\n");
         int count = 0;
-        std::cout << "..[recv_masg]>>sizeof(TAG) :"<< sizeof(TAG) << std::endl;
         count =recv(m_sockfd, masg+count, sizeof(TAG)-count, MSG_WAITALL);
-        std::cout << "..[recv_masg]>>recv_count = " << count << std::endl;
         if(count==-1)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK  )
             {
-                std::cout << "errno : " << errno << std::endl;
                 break;
             }
             return ;
         }
         if(count == 0)
         {
-            std::cout << "client exit" << std::endl;
+            LOG_INFO("[backup]client exit fd : %d",m_sockfd);
             break;
         }
          if(masg->sign == 0)
@@ -137,32 +130,25 @@ void monitor::backup()
     memcpy(backup_f_name,masg->mac_addr,MAC_ADD_SIZE);
     strcat(backup_f_name,"/");
     strcat(backup_f_name,masg->file_name);
-    printf("##[back up]>>IN backup before open()\n");
     if((fd = open(backup_f_name,O_CREAT/*|O_APPEND*/|O_WRONLY,S_IRUSR|S_IWUSR))==-1)
     { 
         LOG_ERROR("[backup]open errno!open return -1 |file_name:%s|",backup_f_name);
         perror("open");
     }else{                                
         LOG_DEBUG("[backup]open success!|file_name:%s|",backup_f_name);
-        printf(">>backip_open_success\n");
     }
     
     lseek(fd,masg->left,SEEK_SET);
     int count =write(fd,masg->data,masg->right-masg->left);
     
-    printf(" masglenth = %d\n",masg->lenth);
-    printf(">>write_succes\n");
     close(fd);
 }
 void monitor::recover()
 {
-    int num = 0;
-
     memcpy(backup_f_name,masg->mac_addr,MAC_ADD_SIZE);
     strcat(backup_f_name,"/");
     transf_file_name(); //目录内容转换
     strcat(backup_f_name,masg->file_name);
-    std::cout << "@@[recover]backup_file_name:" << backup_f_name << std::endl;
 
     if((fd = open(backup_f_name,O_RDONLY,S_IRUSR|S_IWUSR))==-1)
     {
@@ -232,7 +218,6 @@ unsigned long monitor::get_file_size()
 void* send_heart(void* arg)
 {   
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE,NULL);    //手动设置停止点
-    std::cout << "The heartbeat sending thread started." << std::endl;
     monitor* c = (monitor*)arg;
     while(1) 
     {

@@ -36,7 +36,7 @@ void addsig( int sig, void( handler )(int),bool restart = true )
 
 int main(int argc,char **argv)
 {
-    Log::get_instance()->init("./mylog.log",8192,2000000,0);      //日志
+    Log::get_instance()->init("var/log/mylog.log",8192,2000000,0);      //日志
 
     if(argc <= 2)
     {
@@ -62,7 +62,6 @@ int main(int argc,char **argv)
     //预先为每个可能的用户分配一个monitor对象
     monitor* users = new monitor[MAX_FD];
     assert(users);
-    int user_count = 0;
 
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
     if(listenfd < 0)
@@ -74,7 +73,6 @@ int main(int argc,char **argv)
     struct linger tmp = { 1 , 0 };
     setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&tmp,sizeof(tmp));      //端口复用
  
-    int ret = 0;
     struct sockaddr_in address;
     bzero(&address, sizeof(address ) );
     address.sin_family = AF_INET;
@@ -128,7 +126,6 @@ int main(int argc,char **argv)
                     Log::get_instance()->flush();
                     continue;
                 }
-                std::cout << "[acceptfd]connfd = :" << connfd << std::endl;
                 users[connfd].init(connfd, client_address);
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
