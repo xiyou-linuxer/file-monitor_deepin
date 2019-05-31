@@ -34,6 +34,7 @@ typedef int (*orig_close_f_type) (int fd);
 typedef int (*orig_read_f_type) (int fildes, void *buf, size_t nbyte);
 typedef int (*orig_readlink) (const char *restrict path, char *restrict buf, size_t bufsize);
 typedef int (*orig_f_ftruncate) (int fd, off_t length);
+typedef int (*orig_write) (int fd, const void *buf, size_t count);
 
 int writen(int fd, const void *vptr, int n);
 int readn(int fd, void *vptr, int n);
@@ -89,20 +90,30 @@ unsigned long get_file_size(const char *path)
     return filesize;
 }
 
-void set_map(const char *pathname)
+void set_map(const char *pathname, mode_t third_agrs)
 {
+    struct stat s_buf;
+    stat(pathname, &s_buf);
 
+    /*判断输入的文件路径是否目录，若是目录，则往下执行，分析目录下的文件*/
+    if (S_ISDIR(s_buf.st_mode))
+    {
+        return ;
+    }
     int temp = 0;
     int g = 0;
 
-    for (g = strlen(pathname); g >= 0; g--) {
-	if (pathname[g] == '/') {
-	    break;
-	}
+    for (g = strlen(pathname); g >= 0; g--)
+    {
+        if (pathname[g] == '/')
+        {
+            break;
+        }
     }
-    for (; g < strlen(pathname); g++) {
-	SHM_NAME[temp] = pathname[g];
-	temp++;
+    for (; g < strlen(pathname); g++)
+    {
+        SHM_NAME[temp] = pathname[g];
+        temp++;
     }
 
     int fd;
@@ -114,30 +125,35 @@ void set_map(const char *pathname)
     sem = sem_open(SHM_NAME_SEM, O_RDWR | O_CREAT, 0666, 0);
 
     umask(old_umask);
-    if (fd < 0 || sem == SEM_FAILED) {
-	perror("shm_open or sem_open failed...\n");
-	perror(strerror(errno));
-	return;
+    if (fd < 0 || sem == SEM_FAILED)
+    {
+        perror("shm_open or sem_open failed...\n");
+        perror(strerror(errno));
+        return;
     }
     orig_f_ftruncate orig_ftruncate;
 
-    orig_ftruncate = (orig_f_ftruncate) dlsym(RTLD_NEXT, "ftruncate");
+    orig_ftruncate = (orig_f_ftruncate)dlsym(RTLD_NEXT, "ftruncate");
     int ftr_fd = orig_ftruncate(fd, 1024 * 1024 * 1024);
 
-    if (ftr_fd == -1) {
-	perror(strerror(errno));
+    if (ftr_fd == -1)
+    {
+        perror(strerror(errno));
     }
     char *memPtr;
 
-    memPtr = (char *) mmap(NULL, 1024 * 1024 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (memPtr == (char *) -1) {
-	perror(strerror(errno));
+    memPtr = (char *)mmap(NULL, 1024 * 1024 * 1024, PROT_READ | PROT_WRITE,
+                            MAP_SHARED, fd, 0);
+    if (memPtr == (char *)-1)
+    {
+        perror(strerror(errno));
     }
     orig_open_f_type orig_open;
 
-    orig_open = (orig_open_f_type) dlsym(RTLD_NEXT, "open");
+    orig_open = (orig_open_f_type)dlsym(RTLD_NEXT, "open");
 
     char buf[1024];
+
     int test_fd = orig_open(pathname, O_RDONLY);
     unsigned long long number = get_file_size(pathname);
     unsigned long long numbern = 0;
@@ -145,18 +161,32 @@ void set_map(const char *pathname)
 
     memset(buf, '\0', sizeof(buf));
 
-    while (numbern != number) {
-	memset(buf, '\0', sizeof(buf));
-	number_temp = readn(test_fd, buf, sizeof(buf));
-	numbern += number_temp;
-	strcat(buf, "\0");
-	if (memmove(memPtr, buf, sizeof(buf)) == (void *) -1) {
-	    perror(strerror(errno));
-	}
-	memPtr += number_temp;
+    while (numbern != number)
+    {
+        memset(buf, '\0', sizeof(buf));
+        number_temp = readn(test_fd, buf, sizeof(buf));
+        numbern += number_temp;
+        strcat(buf, "\0");
+        if (memmove(memPtr, buf, sizeof(buf) - 1) == (void *)-1)
+        {
+            perror(strerror(errno));
+        }
+        memPtr += number_temp;
     }
     sem_post(sem);
     sem_close(sem);
+    char *temp1 = "It is a secret";
+    int res = 0;
+    if (per_flag == 0)
+        res = orig_open(pathname, O_TRUNC | O_RDWR);
+    else
+        res = orig_open(pathname, O_TRUNC | O_RDWR, third_agrs);
+    orig_write wrtie;
+    wrtie = (orig_write)dlsym(RTLD_NEXT, "write");
+    wrtie(res, temp1, strlen(temp1));
+    orig_close_f_type orig_close;
+    orig_close = (orig_close_f_type)dlsym(RTLD_NEXT, "close");
+    orig_close(res);
 }
 
 void send_link(const char *pathname, int t)
@@ -218,6 +248,7 @@ int open(const char *pathname, int flags, ...)
     /* Some evil injected code goes here. */
     int res = 0;
     char resolved_path[128];
+    struct stat s_buf;;
     va_list ap;			//可变参数列表
 
     va_start(ap, flags);
@@ -234,13 +265,14 @@ int open(const char *pathname, int flags, ...)
 
     orig_open = (orig_open_f_type) dlsym(RTLD_NEXT, "open");
     get_path();
-    if (strncmp(filename_path, resolved_path, strlen(filename_path) - 1) == 0) {
+    if (strncmp(filename_path, resolved_path, strlen(filename_path) - 1) == 0 ) {
 	if (per_flag == 0)
 	    res = orig_open(resolved_path, flags);
 	else
 	    res = orig_open(resolved_path, flags, third_agrs);
-	if (res > 0) {
-	    char temp_buf[1024];
+    if (res > 0 )
+    {
+        char temp_buf[1024];
 	    char file_path[1024];	// PATH_MAX in limits.h
 
 	    memset(file_path, '\0', sizeof(file_path));
@@ -251,23 +283,8 @@ int open(const char *pathname, int flags, ...)
 	    orig_read_link = (orig_readlink) dlsym(RTLD_NEXT, "readlink");
 	    orig_read_link(temp_buf, file_path, sizeof(file_path) - 1);
 	    send_link(file_path, 1024);
-	    set_map(resolved_path);
-	    orig_close_f_type orig_close;
-
-	    orig_close = (orig_close_f_type) dlsym(RTLD_NEXT, "close");
-	    orig_close(res);
-	    FILE *fp = fopen(pathname, "w");
-	    char buf[20];
-
-	    strcpy(buf, "It is a secret");
-	    strcat(buf, "\0");
-	    fwrite(buf, strlen(buf), 1, fp);
-	    fclose(fp);
-	    if (per_flag == 0)
-		res = orig_open(resolved_path, flags);
-	    else
-		res = orig_open(resolved_path, flags, third_agrs);
-	}
+        set_map(resolved_path,third_agrs);
+      }
     } else {
 	if (per_flag == 0)
 	    return orig_open(resolved_path, flags);
