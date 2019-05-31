@@ -109,6 +109,10 @@ int handle_events(int epollfd, int fd, int argc, struct filename_fd_desc *FileAr
 		sprintf(FileArray[array_index].name, "%s", events->name);
 		sprintf(FileArray[array_index].base_name, "%s%s", filename_path, events->name);
 		int temp_fd = open(FileArray[array_index].base_name, O_RDWR);
+		if(temp < 0) 
+		{
+			perror("create file add error");
+		}
 		FileArray[array_index].fd = temp_fd;
 		addfd(epollfd, temp_fd, false);
 		array_index++;
